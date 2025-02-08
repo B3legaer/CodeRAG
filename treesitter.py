@@ -11,6 +11,7 @@ class LanguageEnum(Enum):
     PYTHON = "python"
     RUST = "rust"
     JAVASCRIPT = "javascript"
+    CSHARP = "c_sharp"
     UNKNOWN = "unknown"
 
 LANGUAGE_QUERIES = {
@@ -74,6 +75,23 @@ LANGUAGE_QUERIES = {
             ((comment) @comment)
         """
     },
+    LanguageEnum.CSHARP: {
+        'class_query': """
+            (class_declaration
+                name: (identifier) @class.name)
+        """,
+        'method_query': """
+            [
+                (method_declaration
+                        name: (identifier) @method.name)
+                (constructor_declaration
+                    name: (identifier) @method.name)
+            ]
+        """,
+        'doc_query': """
+            ((comment) @comment)
+        """
+    }
     # Add other languages as needed
 }
 
