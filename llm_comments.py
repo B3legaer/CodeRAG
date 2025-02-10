@@ -64,7 +64,7 @@ async def process_batch_anthropic(batch_texts, semaphore):
             *[
                 anthropic_client.messages.create(
                     max_tokens=1024,
-                    system='''You are an expert programmer who specializes in java, python, rust and javascript. Describe the code in less than 3 lines. Do not add fluff like "the code you provided".''',
+                    system='''You are an expert programmer who specializes in java, python, rust, csharp and javascript. Describe the code in less than 3 lines. Do not add fluff like "the code you provided".''',
                     messages=[
                         {"role": "user", "content": text},
                     ],
@@ -82,7 +82,7 @@ async def process_batch_openai(batch_texts, semaphore):
                 openai_client.chat.completions.create(
                     max_tokens=1024,
                     messages=[
-                        {"role" : "system", "content" : '''You are an expert programmer who specializes in java, python, rust and javascript. Describe the code in less than 3 lines. Do not add fluff like "the code you provided".''' },
+                        {"role" : "system", "content" : '''You are an expert programmer who specializes in java, python, rust, csharp and javascript. Describe the code in less than 3 lines. Do not add fluff like "the code you provided".''' },
                         {"role": "user", "content": text}
                     ],
                     model="gpt-3.5-turbo"

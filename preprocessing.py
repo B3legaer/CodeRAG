@@ -1,5 +1,7 @@
 import os
 import sys
+import logging
+
 from treesitter import Treesitter, LanguageEnum
 from collections import defaultdict
 import csv
@@ -125,7 +127,11 @@ def parse_code_files(file_list):
         treesitter_parser = Treesitter.create_treesitter(language)
         for file_path in files:
             with open(file_path, "r", encoding="utf-8") as file:
-                code = file.read()
+                try:
+                    code = file.read()
+                except UnicodeDecodeError:
+                    logging.warning(f"Skipping file due to encoding issues: {file_path}")
+                    continue
                 file_bytes = code.encode()
                 class_nodes, method_nodes = treesitter_parser.parse(file_bytes)
 
@@ -172,7 +178,11 @@ def find_references(file_list, class_names, method_names):
         treesitter_parser = Treesitter.create_treesitter(language)
         for file_path in files:
             with open(file_path, "r", encoding="utf-8") as file:
-                code = file.read()
+                try:
+                    code = file.read()
+                except UnicodeDecodeError:
+                    logging.warning(f"Skipping file due to encoding issues: {file_path}")
+                    continue
                 file_bytes = code.encode()
                 tree = treesitter_parser.parser.parse(file_bytes)
                 
