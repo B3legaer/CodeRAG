@@ -25,6 +25,8 @@ from prompts import (
     RERANK_PROMPT
 )
 
+from model_executor import call_openai_model
+
 # Configuration
 CONFIG = {
     'SECRET_KEY': os.urandom(24),
@@ -119,85 +121,71 @@ reranker = AnswerdotaiRerankers(column="source_code")
 
 # Replace groq_hyde function
 def openai_hyde(query):
-    chat_completion = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        max_tokens=400,
-        messages=[
-            {
-                "role": "system",
-                "content": HYDE_SYSTEM_PROMPT
-            },
-            {
-                "role": "user",
-                "content": f"Help predict the answer to the query: {query}",
-            }
-        ]
-    )
-    app.logger.info(f"First HYDE response: {chat_completion.choices[0].message.content}")
-    return chat_completion.choices[0].message.content
+    messages = [
+        {
+            "role": "system",
+            "content": HYDE_SYSTEM_PROMPT
+        },
+        {
+            "role": "user",
+            "content": f"Help predict the answer to the query: {query}",
+        }
+    ]
+    response = call_openai_model(openai_client, "gpt-4o-mini", messages, max_tokens=400)
+    app.logger.info(f"First HYDE response: {response}")
+    return response
 
 def openai_hyde_v2(query, temp_context, hyde_query):
-    chat_completion = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        max_tokens=768,
-        messages=[
-            {
-                "role": "system",
-                "content": HYDE_V2_SYSTEM_PROMPT.format(temp_context=temp_context)
-            },
-            {
-                "role": "user",
-                "content": f"Predict the answer to the query: {query}",
-            }
-        ]
-    )
-    app.logger.info(f"Second HYDE response: {chat_completion.choices[0].message.content}")
-    return chat_completion.choices[0].message.content
+    messages = [
+        {
+            "role": "system",
+            "content": HYDE_V2_SYSTEM_PROMPT.format(temp_context=temp_context)
+        },
+        {
+            "role": "user",
+            "content": f"Predict the answer to the query: {query}",
+        }
+    ]
+    response = call_openai_model(openai_client, "gpt-4o-mini", messages, max_tokens=768)
+    app.logger.info(f"Second HYDE response: {response}")
+    return response
 
 
 def openai_chat(query, context):
     start_time = time.time()
     
-    chat_completion = client.chat.completions.create(
-        model='Meta-Llama-3.1-70B-Instruct',
-        messages=[
-            {
-                "role": "system",
-                "content": CHAT_SYSTEM_PROMPT.format(context=context)
-            },
-            {
-                "role": "user",
-                "content": query,
-            }
-        ]
-    )
-    
+    messages = [
+        {
+            "role": "system",
+            "content": CHAT_SYSTEM_PROMPT.format(context=context)
+        },
+        {
+            "role": "user",
+            "content": query,
+        }
+    ]
+    response = call_openai_model(client, "Meta-Llama-3.1-70B-Instruct", messages)
     chat_time = time.time() - start_time
-    app.logger.info(f"Chat response took: {chat_time:.2f} seconds")
-    
-    return chat_completion.choices[0].message.content
+    app.logger.info(f"Chat response took: {chat_time:.2f} seconds")    
+    return response
 
 def rerank_using_small_model(query, context):
     start_time = time.time()
-    
-    chat_completion = client.chat.completions.create(
-        model='Meta-Llama-3.1-8B-Instruct',
-        messages=[
-            {
-                "role": "system",
-                "content": RERANK_PROMPT.format(context=context)
-            },
-            {
-                "role": "user",
-                "content": query,
-            }
-        ]
-    )
-    
+
+    messages = [
+        {
+            "role": "system",
+            "content": RERANK_PROMPT.format(context=context)
+        },
+        {
+            "role": "user",
+            "content": query,
+        }
+    ]
+    response = call_openai_model(client, "Meta-Llama-3.1-8B-Instruct", messages)
     chat_time = time.time() - start_time
     app.logger.info(f"Llama 8B reranker response took: {chat_time:.2f} seconds")
-    
-    return chat_completion.choices[0].message.content
+    return response
 
 def process_input(input_text):
     processed_text = input_text.replace('\n', ' ').replace('\t', ' ')
