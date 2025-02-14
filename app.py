@@ -8,13 +8,11 @@ import redis
 import uuid
 import logging
 import markdown
-from openai import OpenAI
 import json
 from dotenv import load_dotenv
 from redis import ConnectionPool
 import time
 from concurrent.futures import ThreadPoolExecutor
-import openai
 
 load_dotenv()
 
@@ -25,7 +23,7 @@ from prompts import (
     RERANK_PROMPT
 )
 
-from model_executor import call_openai_model
+from model_executor import call_ai_model
 
 # Configuration
 CONFIG = {
@@ -36,7 +34,13 @@ CONFIG = {
     'REDIS_POOL_SIZE': 10,  # Add pool size configuration
     'LOG_FILE': 'app.log',
     'LOG_FORMAT': '%(asctime)s - %(message)s',
-    'LOG_DATE_FORMAT': '%d-%b-%y %H:%M:%S'
+    'LOG_DATE_FORMAT': '%d-%b-%y %H:%M:%S',
+    'CTX_CLIENT': os.getenv("CTX_CLIENT") or "openai",
+    'CTX_MODEL': os.getenv("CTX_MODEL") or "gpt-4o-mini",
+    'CHAT_CLIENT': os.getenv("CHAT_CLIENT") or "sambanova",
+    'CHAT_MODEL': os.getenv("CHAT_MODEL") or "Meta-Llama-3.1-70B-Instruct",
+    'RERANK_CLIENT': os.getenv("RERANK_CLIENT") or "sambanova",
+    'RERANK_MODEL': os.getenv("RERANK_MODEL") or "Meta-Llama-3.1-8B-Instruct"
 }
 
 # Logging setup
@@ -108,19 +112,11 @@ def setup_app():
 # Create the Flask app
 app = setup_app()
 
-# OpenAI client setup
-openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-client = openai.OpenAI(
-    api_key=os.environ.get("SAMBANOVA_API_KEY"),
-    base_url="https://api.sambanova.ai/v1",
-)
-
-
 # Initialize the reranker
 reranker = AnswerdotaiRerankers(column="source_code")
 
 # Replace groq_hyde function
-def openai_hyde(query):
+def hyde(query):
     messages = [
         {
             "role": "system",
@@ -131,11 +127,11 @@ def openai_hyde(query):
             "content": f"Help predict the answer to the query: {query}",
         }
     ]
-    response = call_openai_model(openai_client, "gpt-4o-mini", messages, max_tokens=400)
+    response = call_ai_model(CONFIG.CTX_CLIENT, CONFIG.MODEL, messages, max_tokens=400)
     app.logger.info(f"First HYDE response: {response}")
     return response
 
-def openai_hyde_v2(query, temp_context, hyde_query):
+def hyde_v2(query, temp_context, hyde_query):
     messages = [
         {
             "role": "system",
@@ -146,12 +142,12 @@ def openai_hyde_v2(query, temp_context, hyde_query):
             "content": f"Predict the answer to the query: {query}",
         }
     ]
-    response = call_openai_model(openai_client, "gpt-4o-mini", messages, max_tokens=768)
+    response = call_ai_model(CONFIG.CTX_CLIENT, CONFIG.MODEL, messages, max_tokens=768)
     app.logger.info(f"Second HYDE response: {response}")
     return response
 
 
-def openai_chat(query, context):
+def chat(query, context):
     start_time = time.time()
     
     messages = [
@@ -164,7 +160,7 @@ def openai_chat(query, context):
             "content": query,
         }
     ]
-    response = call_openai_model(client, "Meta-Llama-3.1-70B-Instruct", messages)
+    response = call_ai_model(CONFIG.CHAT_CLIENT, CONFIG.CHAT_MODEL, messages)
     chat_time = time.time() - start_time
     app.logger.info(f"Chat response took: {chat_time:.2f} seconds")    
     return response
@@ -182,7 +178,7 @@ def rerank_using_small_model(query, context):
             "content": query,
         }
     ]
-    response = call_openai_model(client, "Meta-Llama-3.1-8B-Instruct", messages)
+    response = call_ai_model(CONFIG.RERANK_CLIENT, CONFIG.RERANK_MODEL, messages)
     chat_time = time.time() - start_time
     app.logger.info(f"Llama 8B reranker response took: {chat_time:.2f} seconds")
     return response
@@ -198,7 +194,7 @@ def generate_context(query, rerank=False):
     start_time = time.time()
     
     # First HYDE call
-    hyde_query = openai_hyde(query)
+    hyde_query = hyde(query)
     hyde_time = time.time()
     app.logger.info(f"First HYDE call took: {hyde_time - start_time:.2f} seconds")
 
@@ -221,7 +217,7 @@ def generate_context(query, rerank=False):
     temp_context = '\n'.join(method_docs['code'].tolist() + class_docs['source_code'].tolist())
 
     # Second HYDE call
-    hyde_query_v2 = openai_hyde_v2(query, temp_context, hyde_query)
+    hyde_query_v2 = hyde_v2(query, temp_context, hyde_query)
     second_hyde_time = time.time()
     app.logger.info(f"Second HYDE call took: {second_hyde_time - first_search_time:.2f} seconds")
 
@@ -337,7 +333,7 @@ def home():
                     context = context.decode()
 
             # Now, apply reranking during the chat response if needed
-            response = openai_chat(query, context[:8192])  # Adjust as needed
+            response = chat(query, context[:8192])  # Adjust as needed
 
             # Store the conversation history
             redis_key = f"user:{user_id}:responses"
