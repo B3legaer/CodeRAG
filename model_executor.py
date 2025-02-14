@@ -11,7 +11,7 @@ sambanova_client = OpenAI(
 )
 # Local Ollama client setup
 ollama_client = Client(
-    host="http://192.168.2.126:11434",
+    host=os.environ.get("OLLAMA_SERVER", "http://localhost:11434"),
     headers={
 
     }
@@ -26,10 +26,9 @@ def call_openai_model(client, model, messages, max_tokens=400):
     return chat_completion.choices[0].message.content
 
 def call_ollama_model(model, messages, max_tokens=400):
-    response = client.chat(
+    response = ollama_client.chat(
         model=model,
-        messages=messages,
-        max_tokens=max_tokens
+        messages=messages
     )
     return response.message.content
 
@@ -39,7 +38,7 @@ def call_ai_model(client_type, model, messages, max_tokens=400):
     elif client_type == "sambanova":
         return call_openai_model(sambanova_client, model, messages, max_tokens)
     elif client_type == "ollama":
-        return call_ollama_model(model, messages, max_tokens)
+        return call_ollama_model(model, messages)
     else:
         raise ValueError("Invalid client type")
 

@@ -35,13 +35,15 @@ CONFIG = {
     'LOG_FILE': 'app.log',
     'LOG_FORMAT': '%(asctime)s - %(message)s',
     'LOG_DATE_FORMAT': '%d-%b-%y %H:%M:%S',
-    'CTX_CLIENT': os.getenv("CTX_CLIENT") or "openai",
-    'CTX_MODEL': os.getenv("CTX_MODEL") or "gpt-4o-mini",
-    'CHAT_CLIENT': os.getenv("CHAT_CLIENT") or "sambanova",
-    'CHAT_MODEL': os.getenv("CHAT_MODEL") or "Meta-Llama-3.1-70B-Instruct",
-    'RERANK_CLIENT': os.getenv("RERANK_CLIENT") or "sambanova",
-    'RERANK_MODEL': os.getenv("RERANK_MODEL") or "Meta-Llama-3.1-8B-Instruct"
+    'CTX_CLIENT': os.environ.get("CTX_CLIENT", "openai"),
+    'CTX_MODEL': os.environ.get("CTX_MODEL", "gpt-4o-mini"),
+    'CHAT_CLIENT': os.environ.get("CHAT_CLIENT", "sambanova"),
+    'CHAT_MODEL': os.environ.get("CHAT_MODEL", "Meta-Llama-3.1-70B-Instruct"),
+    'RERANK_CLIENT': os.environ.get("RERANK_CLIENT", "sambanova"),
+    'RERANK_MODEL': os.environ.get("RERANK_MODEL", "Meta-Llama-3.1-8B-Instruct")
 }
+
+print(CONFIG)
 
 # Logging setup
 def setup_logging(config):
@@ -127,7 +129,7 @@ def hyde(query):
             "content": f"Help predict the answer to the query: {query}",
         }
     ]
-    response = call_ai_model(CONFIG.CTX_CLIENT, CONFIG.MODEL, messages, max_tokens=400)
+    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=400)
     app.logger.info(f"First HYDE response: {response}")
     return response
 
@@ -142,7 +144,7 @@ def hyde_v2(query, temp_context, hyde_query):
             "content": f"Predict the answer to the query: {query}",
         }
     ]
-    response = call_ai_model(CONFIG.CTX_CLIENT, CONFIG.MODEL, messages, max_tokens=768)
+    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=768)
     app.logger.info(f"Second HYDE response: {response}")
     return response
 
@@ -160,7 +162,7 @@ def chat(query, context):
             "content": query,
         }
     ]
-    response = call_ai_model(CONFIG.CHAT_CLIENT, CONFIG.CHAT_MODEL, messages)
+    response = call_ai_model(CONFIG['CHAT_CLIENT'], CONFIG['CHAT_MODEL'], messages)
     chat_time = time.time() - start_time
     app.logger.info(f"Chat response took: {chat_time:.2f} seconds")    
     return response
@@ -178,7 +180,7 @@ def rerank_using_small_model(query, context):
             "content": query,
         }
     ]
-    response = call_ai_model(CONFIG.RERANK_CLIENT, CONFIG.RERANK_MODEL, messages)
+    response = call_ai_model(CONFIG['RERANK_CLIENT'], CONFIG['RERANK_MODEL'], messages)
     chat_time = time.time() - start_time
     app.logger.info(f"Llama 8B reranker response took: {chat_time:.2f} seconds")
     return response
