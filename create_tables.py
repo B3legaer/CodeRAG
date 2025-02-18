@@ -2,7 +2,7 @@ import os
 import sys
 import pandas as pd
 import lancedb
-from lancedb.embeddings import EmbeddingFunctionRegistry
+from lancedb.embeddings import EmbeddingFunctionRegistry, get_registry
 from lancedb.pydantic import LanceModel, Vector
 import tiktoken
 from dotenv import load_dotenv
@@ -55,17 +55,22 @@ def create_markdown_dataframe(markdown_contents):
 
 
 # Check for environment variables and select embedding model
-if os.getenv("JINA_API_KEY"):
-    print("Using Jina")
-    MODEL_NAME = "jina-embeddings-v3"
-    registry = EmbeddingFunctionRegistry.get_instance()
+registry = EmbeddingFunctionRegistry.get_instance()
+EmbeddingClient = os.environ.get("EMBEDDING_CLIENT", "openai")
+print(f"Using {EmbeddingClient} for embeddings")
+if EmbeddingClient == "jina":
+    MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "jina-embeddings-v3")
     model = registry.get("jina").create(name=MODEL_NAME, max_retries=2)
     EMBEDDING_DIM = 1024  # Jina's dimension
     MAX_TOKENS = 4000   # Jina uses a different tokenizer so it's hard to predict the number of tokens
+elif EmbeddingClient == "ollama":
+    MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
+    ollama_host = os.environ.get("OLLAMA_SERVER", "http://localhost:11434")
+    model = get_registry().get("ollama").create(name=MODEL_NAME, host=ollama_host, max_retries=2)
+    EMBEDDING_DIM = model.ndims()  # Ollama's dimension
+    MAX_TOKENS = 8000
 else:
-    print("Using OpenAI")
-    MODEL_NAME = "text-embedding-3-large"
-    registry = EmbeddingFunctionRegistry.get_instance()
+    MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
     model = registry.get("openai").create(name=MODEL_NAME, max_retries=2)
     EMBEDDING_DIM = model.ndims()  # OpenAI's dimension
     MAX_TOKENS = 8000    # OpenAI's token limit
