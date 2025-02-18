@@ -57,23 +57,25 @@ def create_markdown_dataframe(markdown_contents):
 # Check for environment variables and select embedding model
 registry = EmbeddingFunctionRegistry.get_instance()
 EmbeddingClient = os.environ.get("EMBEDDING_CLIENT", "openai")
-print(f"Using {EmbeddingClient} for embeddings")
 if EmbeddingClient == "jina":
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "jina-embeddings-v3")
     model = registry.get("jina").create(name=MODEL_NAME, max_retries=2)
     EMBEDDING_DIM = 1024  # Jina's dimension
     MAX_TOKENS = 4000   # Jina uses a different tokenizer so it's hard to predict the number of tokens
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
 elif EmbeddingClient == "ollama":
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
     ollama_host = os.environ.get("OLLAMA_SERVER", "http://localhost:11434")
     model = get_registry().get("ollama").create(name=MODEL_NAME, host=ollama_host, max_retries=2)
     EMBEDDING_DIM = model.ndims()  # Ollama's dimension
     MAX_TOKENS = 8000
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
 else:
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
     model = registry.get("openai").create(name=MODEL_NAME, max_retries=2)
     EMBEDDING_DIM = model.ndims()  # OpenAI's dimension
     MAX_TOKENS = 8000    # OpenAI's token limit
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
 
 class Method(LanceModel):
     code: str = model.SourceField()
@@ -91,6 +93,7 @@ class Class(LanceModel):
     file_path: str
     class_name: str
     base_class: str
+    fields: str
     constructor_declaration: str
     method_declarations: str
     references: str
@@ -128,10 +131,10 @@ if __name__ == "__main__":
     special_files = get_special_files(codebase_path)
     special_contents = process_special_files(special_files)
 
-    method_data = pd.read_csv(method_data_file)
-    class_data = pd.read_csv(class_data_file)
+    method_data = pd.read_csv(method_data_file, engine='c')
+    class_data = pd.read_csv(class_data_file, engine='c')
 
-    print(class_data.head())
+    print(f"Preview Header: \n{class_data.head()}")
 
     uri = "database"
     db = lancedb.connect(uri)
@@ -141,6 +144,8 @@ if __name__ == "__main__":
     #     table = db[codebase_path]
     # else:
     try:
+        print("\nStart embedding")
+        
         table = db.create_table(
             table_name + "_method", 
             schema=Method, 
@@ -185,7 +190,7 @@ if __name__ == "__main__":
         # class_table.add(markdown_contents) 
         # add after something because chance class_data may be empty
         if len(class_data) == 0:
-            columns = ['source_code', 'file_path', 'class_name', 'constructor_declaration', 'method_declarations', 'references']
+            columns = ['source_code', 'file_path', 'class_name', 'base_class', 'fields', 'constructor_declaration', 'method_declarations', 'references']
             empty_data = {col: ["empty"] for col in columns}
 
             class_data = pd.DataFrame(empty_data)

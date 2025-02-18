@@ -23,6 +23,8 @@ LANGUAGE_QUERIES = {
                     (identifier) @class.base)
             )
         """,
+        'field_query': """
+        """,
         'method_query': """
             [
                 (method_declaration
@@ -40,6 +42,8 @@ LANGUAGE_QUERIES = {
             (class_definition
                 name: (identifier) @class.name)
         """,
+        'field_query': """
+        """,
         'method_query': """
             (function_definition
                 name: (identifier) @function.name)
@@ -53,6 +57,8 @@ LANGUAGE_QUERIES = {
         'class_query': """
             (struct_item
                 name: (type_identifier) @class.name)
+        """,
+        'field_query': """
         """,
         'method_query': """
             (function_item
@@ -72,6 +78,8 @@ LANGUAGE_QUERIES = {
                 (base_list
                     (identifier) @class.base))
         """,
+        'field_query': """
+        """,
         'method_query': """
             (method_definition
                 name: (property_identifier) @method.name)
@@ -86,6 +94,17 @@ LANGUAGE_QUERIES = {
                 name: (identifier) @class.name
                 (base_list
                     (identifier) @class.base))
+        """,
+        'field_query': """
+            (field_declaration
+                ((modifier) @field.modifier
+                    (#any-eq? @field.modifier "public")
+                    (variable_declaration
+                        (variable_declarator
+                            name: (identifier) @field.name)
+                    )
+                )
+            )
         """,
         'method_query': """
             [
@@ -122,12 +141,14 @@ class TreesitterClassNode:
         self,
         name: str,
         base_class: list,
+        fields: list,
         method_declarations: list,
         node,
     ):
         self.name = name
         self.source_code = node.text.decode()
         self.base_class = base_class
+        self.fields = fields
         self.method_declarations = method_declarations
         self.node = node
 
@@ -142,6 +163,7 @@ class Treesitter(ABC):
 
         # Corrected query instantiation
         self.class_query = self.language_obj.query(self.query_config['class_query'])
+        self.field_query = self.language_obj.query(self.query_config['field_query'])
         self.method_query = self.language_obj.query(self.query_config['method_query'])
         self.doc_query = self.language_obj.query(self.query_config['doc_query'])
 
@@ -166,8 +188,9 @@ class Treesitter(ABC):
                 logging.info(f"Found class: {class_name}")
                 class_name_by_node[class_node.id] = class_name
                 base_class = self._extract_base_class(class_node)
+                fields = self._extract_public_fields(class_node)
                 method_declarations = self._extract_methods_in_class(class_node)
-                class_results.append(TreesitterClassNode(class_name, base_class, method_declarations, class_node))
+                class_results.append(TreesitterClassNode(class_name, base_class, fields, method_declarations, class_node))
                 class_nodes.append(class_node)
 
         method_captures = self.method_query.captures(root_node)
@@ -225,6 +248,14 @@ class Treesitter(ABC):
             if capture_name == 'class.base':
                 base_class.append(node.text.decode())
         return base_class
+    
+    def _extract_public_fields(self, class_node):
+        fields = []
+        captures = self.field_query.captures(class_node)
+        for node, capture_name in captures:
+            if capture_name == 'field.name':
+                fields.append(node.text.decode())
+        return fields
 
     def _is_descendant_of(self, node, ancestor):
         # Check if 'node' is a descendant of 'ancestor'

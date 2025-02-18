@@ -142,7 +142,8 @@ def parse_code_files(file_list):
                     class_data.append({
                         "file_path": file_path,
                         "class_name": class_name,
-                        "base_class": ",".join(class_node.base_class) if class_node.base_class else "",
+                        "base_class": ", ".join(class_node.base_class) if class_node.base_class else "",
+                        "fields": ", ".join(class_node.fields) if class_node.fields else "",
                         "constructor_declaration": "",  # Extract if needed
                         "method_declarations": "\n-----\n".join(class_node.method_declarations) if class_node.method_declarations else "",
                         "source_code": class_node.source_code,
@@ -228,7 +229,7 @@ def create_output_directory(codebase_path):
 
 def write_class_data_to_csv(class_data, output_directory):
     output_file = os.path.join(output_directory, "class_data.csv")
-    fieldnames = ["file_path", "class_name", "base_class", "constructor_declaration", "method_declarations", "source_code", "references"]
+    fieldnames = ["class_name", "base_class", "fields", "constructor_declaration", "method_declarations", "source_code", "references", "file_path"]
     with open(output_file, "w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
