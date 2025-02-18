@@ -18,7 +18,10 @@ LANGUAGE_QUERIES = {
     LanguageEnum.JAVA: {
         'class_query': """
             (class_declaration
-                name: (identifier) @class.name)
+                name: (identifier) @class.name
+                (base_list
+                    (identifier) @class.base)
+            )
         """,
         'method_query': """
             [
@@ -65,7 +68,9 @@ LANGUAGE_QUERIES = {
     LanguageEnum.JAVASCRIPT: {
         'class_query': """
             (class_declaration
-                name: (identifier) @class.name)
+                name: (identifier) @class.name
+                (base_list
+                    (identifier) @class.base))
         """,
         'method_query': """
             (method_definition
@@ -78,7 +83,9 @@ LANGUAGE_QUERIES = {
     LanguageEnum.CSHARP: {
         'class_query': """
             (class_declaration
-                name: (identifier) @class.name)
+                name: (identifier) @class.name
+                (base_list
+                    (identifier) @class.base))
         """,
         'method_query': """
             [
@@ -114,11 +121,13 @@ class TreesitterClassNode:
     def __init__(
         self,
         name: str,
+        base_class: list,
         method_declarations: list,
         node,
     ):
         self.name = name
         self.source_code = node.text.decode()
+        self.base_class = base_class
         self.method_declarations = method_declarations
         self.node = node
 
@@ -156,8 +165,9 @@ class Treesitter(ABC):
                 class_node = node.parent
                 logging.info(f"Found class: {class_name}")
                 class_name_by_node[class_node.id] = class_name
+                base_class = self._extract_base_class(class_node)
                 method_declarations = self._extract_methods_in_class(class_node)
-                class_results.append(TreesitterClassNode(class_name, method_declarations, class_node))
+                class_results.append(TreesitterClassNode(class_name, base_class, method_declarations, class_node))
                 class_nodes.append(class_node)
 
         method_captures = self.method_query.captures(root_node)
@@ -207,6 +217,14 @@ class Treesitter(ABC):
                 break
             current_node = current_node.prev_sibling
         return doc_comment.strip()
+    
+    def _extract_base_class(self, class_node):
+        base_class = []
+        captures = self.class_query.captures(class_node)
+        for node, capture_name in captures:
+            if capture_name == 'class.base':
+                base_class.append(node.text.decode())
+        return base_class
 
     def _is_descendant_of(self, node, ancestor):
         # Check if 'node' is a descendant of 'ancestor'

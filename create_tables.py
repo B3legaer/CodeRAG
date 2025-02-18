@@ -90,6 +90,7 @@ class Class(LanceModel):
     class_embeddings: Vector(EMBEDDING_DIM) = model.VectorField()
     file_path: str
     class_name: str
+    base_class: str
     constructor_declaration: str
     method_declarations: str
     references: str
