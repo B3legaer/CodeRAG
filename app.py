@@ -144,7 +144,7 @@ def hyde_v2(query, temp_context, hyde_query):
             "content": f"分析问题并完善上下文：{query}",
         }
     ]
-    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=768)
+    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=1024)
     app.logger.info(f"Second HYDE response: {response}")
     return response
 
@@ -182,7 +182,8 @@ def rerank_using_small_model(query, context):
     ]
     response = call_ai_model(CONFIG['RERANK_CLIENT'], CONFIG['RERANK_MODEL'], messages)
     chat_time = time.time() - start_time
-    app.logger.info(f"Llama 8B reranker response took: {chat_time:.2f} seconds")
+    app.logger.info(f"{CONFIG['RERANK_CLIENT']} {CONFIG['RERANK_MODEL']} response took: {chat_time:.2f} seconds")
+    print(response)
     return response
 
 def process_input(input_text):
@@ -200,18 +201,18 @@ def generate_context(query, rerank=False):
     hyde_time = time.time()
     app.logger.info(f"First HYDE call took: {hyde_time - start_time:.2f} seconds")
 
+    def search_class_table():
+        return class_table.search(hyde_query).limit(5).to_pandas()
+
     # Concurrent execution of first database searches
     def search_method_table():
         return method_table.search(hyde_query).limit(5).to_pandas()
 
-    def search_class_table():
-        return class_table.search(hyde_query).limit(5).to_pandas()
-
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_method_docs = executor.submit(search_method_table)
         future_class_docs = executor.submit(search_class_table)
-        method_docs = future_method_docs.result()
+        future_method_docs = executor.submit(search_method_table)
         class_docs = future_class_docs.result()
+        method_docs = future_method_docs.result()
 
     first_search_time = time.time()
     app.logger.info(f"First DB search took: {first_search_time - hyde_time:.2f} seconds")
@@ -224,17 +225,17 @@ def generate_context(query, rerank=False):
     app.logger.info(f"Second HYDE call took: {second_hyde_time - first_search_time:.2f} seconds")
 
     # Concurrent execution of second database searches
+    def search_class_table_v2():
+        return class_table.search(hyde_query_v2)
+    
     def search_method_table_v2():
         return method_table.search(hyde_query_v2)
 
-    def search_class_table_v2():
-        return class_table.search(hyde_query_v2)
-
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_method_search = executor.submit(search_method_table_v2)
         future_class_search = executor.submit(search_class_table_v2)
-        method_search = future_method_search.result()
+        future_method_search = executor.submit(search_method_table_v2)
         class_search = future_class_search.result()
+        method_search = future_method_search.result()
 
     search_time = time.time()
     app.logger.info(f"Second DB search took: {search_time - second_hyde_time:.2f} seconds")
@@ -243,18 +244,18 @@ def generate_context(query, rerank=False):
     app.logger.info(f"Reranking enabled: {rerank}")
     if rerank:
         rerank_start_time = time.time()  # Start timing before reranking
+
+        def rerank_class_search():
+            return class_search.rerank(reranker)
         
         def rerank_method_search():
             return method_search.rerank(reranker)
 
-        def rerank_class_search():
-            return class_search.rerank(reranker)
-
         with ThreadPoolExecutor(max_workers=2) as executor:
-            future_method_search = executor.submit(rerank_method_search)
             future_class_search = executor.submit(rerank_class_search)
-            method_search = future_method_search.result()
+            future_method_search = executor.submit(rerank_method_search)
             class_search = future_class_search.result()
+            method_search = future_method_search.result()
 
         rerank_time = time.time()
         app.logger.info(f"Reranking took: {rerank_time - rerank_start_time:.2f} seconds")
@@ -263,48 +264,87 @@ def generate_context(query, rerank=False):
     rerank_time = time.time() if rerank else search_time
 
     # Fetch top documents
-    method_docs = method_search.limit(5).to_list()
     class_docs = class_search.limit(5).to_list()
+    method_docs = method_search.limit(5).to_list()
     final_search_time = time.time()
     app.logger.info(f"Final DB search took: {final_search_time - rerank_time:.2f} seconds")
 
-    def process_methods():
-        top_3_methods = method_docs[:3]
-        methods_combined = "\n\n".join(
-            f"File: {doc['file_path']}\nCode:\n{doc['code']}" for doc in top_3_methods
-        )
-        return rerank_using_small_model(query, methods_combined)
-
     def process_classes():
-        top_3_classes = class_docs[:3]
+        top_5_classes = class_docs[:5]
         classes_combined = "\n\n".join(
             f"File: {doc['file_path']}\nClass Info:\n{doc['source_code']} References: \n{doc['references']}  \n END OF ROW {i}"
-            for i, doc in enumerate(top_3_classes)
+            for i, doc in enumerate(top_5_classes)
         )
         return rerank_using_small_model(query, classes_combined)
+
+    def process_methods():
+        top_5_methods = method_docs[:5]
+        methods_combined = "\n\n".join(
+            f"File: {doc['file_path']}\nCode:\n{doc['code']}" for doc in top_5_methods
+        )
+        return rerank_using_small_model(query, methods_combined)
 
     # Parallel execution of reranking
     parallel_start_time = time.time()
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_methods = executor.submit(process_methods)
         future_classes = executor.submit(process_classes)
-        methods_context = future_methods.result()
+        future_methods = executor.submit(process_methods)
         classes_context = future_classes.result()
+        methods_context = future_methods.result()
     parallel_time = time.time() - parallel_start_time
     app.logger.info(f"Parallel reranking took: {parallel_time:.2f} seconds")
 
-    final_context = f"{methods_context}\n{classes_context}"
+    final_context = f"{classes_context}\n{methods_context}"
 
     app.logger.info(f"Final context: {final_context}")
-
     app.logger.info("Context generation complete.")
 
     total_time = time.time() - start_time
     app.logger.info(f"Total context generation took: {total_time:.2f} seconds")
-    return final_context
-
-    
+    return (final_context, class_docs, method_docs)
     # return methods_combined + "\n below is class or constructor related code \n" + classes_combined
+
+@app.route('/queryCodeRAG/', methods=['GET', 'POST'])
+def queryCodeRAG():
+    if request.method == 'GET':
+        return "Query CodeRAG endpoint"
+    if request.method == 'POST':
+        # This is an AJAX request
+        data = request.get_json()
+        print(data)
+        query = data['query'] if data['query'] != "" else data['fullInput']
+        user_id = session.get('user_id')
+        if user_id is None:
+            user_id = str(uuid.uuid4())
+            session['user_id'] = user_id
+
+        final_context, class_docs, method_docs = generate_context(query, True)
+        app.logger.info("Generated context for query with CodeRAG.")
+        app.redis_client.set(f"user:{user_id}:chat_context", final_context)
+
+        # Construct the "context item" format expected by Continue
+        context_items = [
+            {
+                "name": "Context Summary",
+                "description": f"Context retrieval summary based on user input: {query}",
+                "content": final_context,
+            }
+        ]
+        for i, doc in enumerate(class_docs):
+            context_items.append({
+                "name": doc['class_name'],
+                "description": f"Top {i+1} Class {doc['class_name']} in file {doc['file_path']}",
+                "content": doc['source_code'],
+            })
+        for i, doc in enumerate(method_docs):
+            context_items.append({
+                "name": f"{doc['class_name']}.{doc['name']}",
+                "description": f"Top{i+1} method: {doc['class_name']}.{doc['name']}\n{doc['doc_comment']}",
+                "content": doc['source_code'],
+            })
+
+        # Return all context as JSON
+        return jsonify(context_items)
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -335,7 +375,7 @@ def home():
                     context = context.decode()
 
             # Now, apply reranking during the chat response if needed
-            response = chat(query, context[:8192])  # Adjust as needed
+            response = chat(query, context[:16384])  # Adjust as needed
 
             # Store the conversation history
             redis_key = f"user:{user_id}:responses"
