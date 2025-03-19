@@ -126,7 +126,7 @@ def hyde(query):
         },
         {
             "role": "user",
-            "content": f"Help predict the answer to the query: {query}",
+            "content": f"帮助分析用户问题并查询相关上下文: {query}",
         }
     ]
     response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=400)
@@ -141,7 +141,7 @@ def hyde_v2(query, temp_context, hyde_query):
         },
         {
             "role": "user",
-            "content": f"Predict the answer to the query: {query}",
+            "content": f"分析问题并完善上下文：{query}",
         }
     ]
     response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=768)
