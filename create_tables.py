@@ -70,6 +70,13 @@ elif EmbeddingClient == "ollama":
     EMBEDDING_DIM = model.ndims()  # Ollama's dimension
     MAX_TOKENS = 8000
     print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
+elif EmbeddingClient == "vllm":
+    MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
+    vllm_host = os.environ.get("VLLM_SERVER", "http://localhost:8000/v1")
+    model = get_registry().get("vllm").create(name=MODEL_NAME, host=vllm_host, max_retries=2)
+    EMBEDDING_DIM = 1024  # Jina's dimension
+    MAX_TOKENS = 4000
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
 else:
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
     model = registry.get("openai").create(name=MODEL_NAME, max_retries=2)

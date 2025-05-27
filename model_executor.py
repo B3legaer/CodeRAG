@@ -16,6 +16,12 @@ ollama_client = Client(
 
     }
 )
+# Local vllm client setup
+vllm_client = OpenAI(
+    base_url=os.environ.get("VLLM_SERVER", "http://localhost:8000/v1"),
+    api_key="fake",
+    timeout=600
+)
 
 def call_openai_model(client, model, messages, max_tokens=400):
     chat_completion = client.chat.completions.create(
@@ -32,6 +38,13 @@ def call_ollama_model(model, messages, max_tokens=400):
     )
     return response.message.content
 
+def call_vllm_model(model, messages, max_tokens=400):
+    chat_completion = vllm_client.chat.completions.createt(
+        model=model,
+        messages=messages
+    )
+    return chat_completion.choices[0].message.content
+
 def call_ai_model(client_type, model, messages, max_tokens=400):
     if client_type == "openai":
         return call_openai_model(openai_client, model, messages, max_tokens)
@@ -39,6 +52,8 @@ def call_ai_model(client_type, model, messages, max_tokens=400):
         return call_openai_model(sambanova_client, model, messages, max_tokens)
     elif client_type == "ollama":
         return call_ollama_model(model, messages)
+    elif client_type == "vllm":
+        return call_vllm_model(model, messages)
     else:
         raise ValueError("Invalid client type")
 
