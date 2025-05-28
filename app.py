@@ -364,7 +364,7 @@ def home():
 
             if '@codebase' in query:
                 query = query.replace('@codebase', '').strip()
-                context = generate_context(query, rerank)
+                context, class_docs, method_docs = generate_context(query, rerank)
                 app.logger.info("Generated context for query with @codebase.")
                 app.redis_client.set(f"user:{user_id}:chat_context", context)
             else:

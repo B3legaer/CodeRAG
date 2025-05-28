@@ -73,8 +73,20 @@ elif EmbeddingClient == "ollama":
 elif EmbeddingClient == "vllm":
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
     vllm_host = os.environ.get("VLLM_SERVER", "http://localhost:8000/v1")
-    model = get_registry().get("vllm").create(name=MODEL_NAME, host=vllm_host, max_retries=2)
+    model = get_registry().get("openai").create(name=MODEL_NAME, host=vllm_host, max_retries=2)
     EMBEDDING_DIM = 1024  # Jina's dimension
+    MAX_TOKENS = 4000
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
+elif EmbeddingClient == "hf":
+    MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
+    model = get_registry().get("huggingface").create(name=MODEL_NAME, trust_remote_code=True)
+    EMBEDDING_DIM = model.ndims()  # hf's dimension
+    MAX_TOKENS = 4000
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
+elif EmbeddingClient == "sf":
+    MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
+    model = get_registry().get("sentence-transformers").create(name=MODEL_NAME)
+    EMBEDDING_DIM = model.ndims()  # sf's dimension
     MAX_TOKENS = 4000
     print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
 else:
@@ -205,10 +217,14 @@ if __name__ == "__main__":
         print("Adding class data to table")
         class_table.add(class_data)
 
+        # TODO fix missing=[fields, base_class] error
+        '''
         if len(special_contents) > 0:
             markdown_df = create_markdown_dataframe(special_contents)
             print(f"Adding {len(markdown_df)} special files to table")
+            print(class_table.schema)
             class_table.add(markdown_df)
+        '''
 
         print("Embedded method data successfully")
         print("Embedded class data successfully")

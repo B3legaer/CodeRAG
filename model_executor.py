@@ -4,11 +4,12 @@ import openai
 from ollama import Client
 
 # OpenAI client setup
+'''
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 sambanova_client = OpenAI(
     api_key=os.environ.get("SAMBANOVA_API_KEY"),
     base_url="https://api.sambanova.ai/v1",
-)
+)'''
 # Local Ollama client setup
 ollama_client = Client(
     host=os.environ.get("OLLAMA_SERVER", "http://localhost:11434"),
@@ -38,10 +39,11 @@ def call_ollama_model(model, messages, max_tokens=400):
     )
     return response.message.content
 
-def call_vllm_model(model, messages, max_tokens=400):
-    chat_completion = vllm_client.chat.completions.createt(
+def call_vllm_model(model, messages, max_tokens=15360):
+    chat_completion = vllm_client.chat.completions.create(
         model=model,
-        messages=messages
+        messages=messages,
+        max_tokens=max_tokens
     )
     return chat_completion.choices[0].message.content
 

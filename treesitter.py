@@ -21,6 +21,9 @@ LANGUAGE_QUERIES = {
                 name: (identifier) @class.name
                 (base_list
                     (identifier) @class.base)
+
+            (class_declaration
+                name: (identifier) @class.name)
             )
         """,
         'field_query': """
@@ -74,12 +77,9 @@ LANGUAGE_QUERIES = {
     LanguageEnum.JAVASCRIPT: {
         'class_query': """
             (class_declaration
-                name: (identifier) @class.name
-                (base_list
-                    (identifier) @class.base))
+                name: (identifier) @class.name)
         """,
-        'field_query': """
-        """,
+        'field_query': "",
         'method_query': """
             (method_definition
                 name: (property_identifier) @method.name)
@@ -94,6 +94,9 @@ LANGUAGE_QUERIES = {
                 name: (identifier) @class.name
                 (base_list
                     (identifier) @class.base))
+            
+            (class_declaration
+                name: (identifier) @class.name)
         """,
         'field_query': """
             (field_declaration
