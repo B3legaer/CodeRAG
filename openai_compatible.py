@@ -172,7 +172,7 @@ def hyde(query):
             "content": f"Help analyze the user question and query relevant context: {query}",
         }
     ]
-    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=400)
+    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=10240)
     logger.info(f"First HYDE response: {response}")
     return response
 
@@ -187,7 +187,7 @@ def hyde_v2(query, temp_context, hyde_query):
             "content": f"Analyze the question and enhance the context: {query}",
         }
     ]
-    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=1024)
+    response = call_ai_model(CONFIG['CTX_CLIENT'], CONFIG['CTX_MODEL'], messages, max_tokens=10240)
     logger.info(f"Second HYDE response: {response}")
     return response
 
@@ -343,7 +343,7 @@ def generate_context(query, rerank=False):
 
     total_time = time.time() - start_time
     logger.info(f"Total context generation took: {total_time:.2f} seconds")
-    return (final_context, class_docs, method_docs)
+    return (final_context, class_docs, method_docs, hyde_query, hyde_query_v2, {"classes": classes_context, "methods": methods_context})
 
 # FastAPI endpoints
 @app.get("/")
@@ -408,15 +408,29 @@ async def chat_completions(request: ChatCompletionRequest):
         context = ""
         class_docs = []
         method_docs = []
+        hyde_response_1 = None
+        hyde_response_2 = None
+        rerank_responses = {"classes": None, "methods": None}
         
         # Generate context using app.py's generate_context function
         if needs_context:
             #query_clean = query.replace('@codebase', '').strip()
-            context, class_docs, method_docs = generate_context(query, True)
+            context_result = generate_context(query, True)
+            if context_result and len(context_result) >= 6:  # Updated to expect 6 items
+                context, class_docs, method_docs, hyde_response_1, hyde_response_2, rerank_responses = context_result
+            else:
+                logger.warning("generate_context returned invalid result")
+                context = ""
+                class_docs = []
+                method_docs = []
             logger.info("Generated context for query with codebase reference.")
         
         # Generate chat response using app.py's chat function
-        response_text = chat(query, context[:CONFIG['CONTEXT_LENGTH']])
+        response_text = chat(query, context[:CONFIG['CONTEXT_LENGTH']] if context else "")
+        
+        # Add null check for response_text
+        if response_text is None:
+            response_text = "I apologize, but I encountered an issue generating a response. Please try again."
         
         # Format response in OpenAI format
         response_data = {
@@ -435,9 +449,9 @@ async def chat_completions(request: ChatCompletionRequest):
                 }
             ],
             "usage": {
-                "prompt_tokens": len(query.split()),
-                "completion_tokens": len(response_text.split()),
-                "total_tokens": len(query.split()) + len(response_text.split())
+                "prompt_tokens": len(query.split()) if query else 0,
+                "completion_tokens": len(response_text.split()) if response_text else 0,
+                "total_tokens": (len(query.split()) if query else 0) + (len(response_text.split()) if response_text else 0)
             }
         }
         
@@ -458,6 +472,9 @@ async def chat_completions(request: ChatCompletionRequest):
             "class_docs_count": len(class_docs) if class_docs else 0,
             "method_docs_count": len(method_docs) if method_docs else 0,
             "context": context[:1000] + "..." if len(context) > 1000 else context,  # Truncate for logging
+            "hyde_response_1": hyde_response_1,
+            "hyde_response_2": hyde_response_2,
+            "rerank_responses": rerank_responses,
             "response": response_data,
             "request_model": request.model,
             "stream_requested": request.stream,

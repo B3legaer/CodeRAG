@@ -40,7 +40,7 @@ def call_ollama_model(model, messages, max_tokens=400):
     )
     return response.message.content
 
-def call_vllm_model(model, messages, max_tokens=1024):
+def call_vllm_model(model, messages, max_tokens=10240):    
     chat_completion = vllm_client.chat.completions.create(
         model=model,
         messages=messages,
@@ -56,7 +56,7 @@ def call_ai_model(client_type, model, messages, max_tokens=400):
     elif client_type == "ollama":
         return call_ollama_model(model, messages, max_tokens)
     elif client_type == "vllm":
-        return call_vllm_model(model, messages, max_tokens)
+        return call_vllm_model(model, messages, max_tokens=10240)
     else:
         raise ValueError("Invalid client type")
 
