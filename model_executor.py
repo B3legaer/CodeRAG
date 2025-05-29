@@ -35,11 +35,12 @@ def call_openai_model(client, model, messages, max_tokens=400):
 def call_ollama_model(model, messages, max_tokens=400):
     response = ollama_client.chat(
         model=model,
-        messages=messages
+        messages=messages,
+        max_tokens=max_tokens
     )
     return response.message.content
 
-def call_vllm_model(model, messages, max_tokens=15360):
+def call_vllm_model(model, messages, max_tokens=1024):
     chat_completion = vllm_client.chat.completions.create(
         model=model,
         messages=messages,
@@ -53,9 +54,9 @@ def call_ai_model(client_type, model, messages, max_tokens=400):
     elif client_type == "sambanova":
         return call_openai_model(sambanova_client, model, messages, max_tokens)
     elif client_type == "ollama":
-        return call_ollama_model(model, messages)
+        return call_ollama_model(model, messages, max_tokens)
     elif client_type == "vllm":
-        return call_vllm_model(model, messages)
+        return call_vllm_model(model, messages, max_tokens)
     else:
         raise ValueError("Invalid client type")
 
