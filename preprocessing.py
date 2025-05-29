@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import chardet
 
 from treesitter import Treesitter, LanguageEnum
 from collections import defaultdict
@@ -112,6 +113,56 @@ def load_files(codebase_path):
                         print(f"Unsupported file extension {file_ext} in file {file_path}. Skipping.")
     return file_list
 
+def read_file_with_encoding(file_path):
+    """
+    Try to read a file with multiple encodings.
+    Returns the file content as a string, or None if all encodings fail.
+    """
+    # List of encodings to try, in order of preference
+    encodings_to_try = [
+        'utf-8',
+        'utf-16',
+        'utf-16-be',
+        'utf-16-le',
+        'latin1',
+        'cp1252',  # Windows-1252
+        'iso-8859-1',
+        'ascii'
+    ]
+    
+    # First, try to detect the encoding
+    try:
+        with open(file_path, 'rb') as file:
+            raw_data = file.read()
+            detected = chardet.detect(raw_data)
+            if detected['encoding'] and detected['confidence'] > 0.7:
+                try:
+                    return raw_data.decode(detected['encoding'])
+                except (UnicodeDecodeError, LookupError):
+                    pass
+    except Exception:
+        pass
+    
+    # If detection fails, try common encodings
+    for encoding in encodings_to_try:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                return file.read()
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+        except Exception as e:
+            logging.warning(f"Error reading {file_path} with {encoding}: {e}")
+            continue
+    
+    # If all else fails, try reading as binary and decode with errors='replace'
+    try:
+        with open(file_path, 'rb') as file:
+            raw_data = file.read()
+            return raw_data.decode('utf-8', errors='replace')
+    except Exception as e:
+        logging.error(f"Failed to read {file_path} with any encoding: {e}")
+        return None
+
 def parse_code_files(file_list):
     class_data = []
     method_data = []
@@ -126,42 +177,41 @@ def parse_code_files(file_list):
     for language, files in files_by_language.items():
         treesitter_parser = Treesitter.create_treesitter(language)
         for file_path in files:
-            with open(file_path, "r", encoding="utf-8") as file:
-                try:
-                    code = file.read()
-                except UnicodeDecodeError:
-                    logging.warning(f"Skipping file due to encoding issues: {file_path}")
-                    continue
-                file_bytes = code.encode()
-                class_nodes, method_nodes = treesitter_parser.parse(file_bytes)
+            code = read_file_with_encoding(file_path)
+            if code is None:
+                logging.warning(f"Skipping file due to encoding issues: {file_path}")
+                continue
+                
+            file_bytes = code.encode('utf-8')
+            class_nodes, method_nodes = treesitter_parser.parse(file_bytes)
 
-                # Process class nodes
-                for class_node in class_nodes:
-                    class_name = class_node.name
-                    all_class_names.add(class_name)
-                    class_data.append({
-                        "file_path": file_path,
-                        "class_name": class_name,
-                        "base_class": ", ".join(class_node.base_class) if class_node.base_class else "",
-                        "fields": ", ".join(class_node.fields) if class_node.fields else "",
-                        "constructor_declaration": "",  # Extract if needed
-                        "method_declarations": "\n-----\n".join(class_node.method_declarations) if class_node.method_declarations else "",
-                        "source_code": class_node.source_code,
-                        "references": []  # Will populate later
-                    })
+            # Process class nodes
+            for class_node in class_nodes:
+                class_name = class_node.name
+                all_class_names.add(class_name)
+                class_data.append({
+                    "file_path": file_path,
+                    "class_name": class_name,
+                    "base_class": ", ".join(class_node.base_class) if class_node.base_class else "",
+                    "fields": ", ".join(class_node.fields) if class_node.fields else "",
+                    "constructor_declaration": "",  # Extract if needed
+                    "method_declarations": "\n-----\n".join(class_node.method_declarations) if class_node.method_declarations else "",
+                    "source_code": class_node.source_code,
+                    "references": []  # Will populate later
+                })
 
-                # Process method nodes
-                for method_node in method_nodes:
-                    method_name = method_node.name
-                    all_method_names.add(method_name)
-                    method_data.append({
-                        "file_path": file_path,
-                        "class_name": method_node.class_name if method_node.class_name else "",
-                        "name": method_name,
-                        "doc_comment": method_node.doc_comment,
-                        "source_code": method_node.method_source_code,
-                        "references": []  # Will populate later
-                    })
+            # Process method nodes
+            for method_node in method_nodes:
+                method_name = method_node.name
+                all_method_names.add(method_name)
+                method_data.append({
+                    "file_path": file_path,
+                    "class_name": method_node.class_name if method_node.class_name else "",
+                    "name": method_name,
+                    "doc_comment": method_node.doc_comment,
+                    "source_code": method_node.method_source_code,
+                    "references": []  # Will populate later
+                })
 
     return class_data, method_data, all_class_names, all_method_names
 
@@ -179,44 +229,43 @@ def find_references(file_list, class_names, method_names):
     for language, files in files_by_language.items():
         treesitter_parser = Treesitter.create_treesitter(language)
         for file_path in files:
-            with open(file_path, "r", encoding="utf-8") as file:
-                try:
-                    code = file.read()
-                except UnicodeDecodeError:
-                    logging.warning(f"Skipping file due to encoding issues: {file_path}")
-                    continue
-                file_bytes = code.encode()
-                tree = treesitter_parser.parser.parse(file_bytes)
+            code = read_file_with_encoding(file_path)
+            if code is None:
+                logging.warning(f"Skipping file due to encoding issues: {file_path}")
+                continue
                 
-                # Single pass through the AST
-                stack = [(tree.root_node, None)]
-                while stack:
-                    node, parent = stack.pop()
+            file_bytes = code.encode('utf-8')
+            tree = treesitter_parser.parser.parse(file_bytes)
+            
+            # Single pass through the AST
+            stack = [(tree.root_node, None)]
+            while stack:
+                node, parent = stack.pop()
+                
+                # Check for identifiers
+                if node.type == 'identifier':
+                    name = node.text.decode()
                     
-                    # Check for identifiers
-                    if node.type == 'identifier':
-                        name = node.text.decode()
-                        
-                        # Check if it's a class reference
-                        if name in class_names and parent and parent.type in ['type', 'class_type', 'object_creation_expression']:
-                            references['class'][name].append({
-                                "file": file_path,
-                                "line": node.start_point[0] + 1,
-                                "column": node.start_point[1] + 1,
-                                "text": parent.text.decode()
-                            })
-                        
-                        # Check if it's a method reference
-                        if name in method_names and parent and parent.type in ['call_expression', 'method_invocation']:
-                            references['method'][name].append({
-                                "file": file_path,
-                                "line": node.start_point[0] + 1,
-                                "column": node.start_point[1] + 1,
-                                "text": parent.text.decode()
-                            })
+                    # Check if it's a class reference
+                    if name in class_names and parent and parent.type in ['type', 'class_type', 'object_creation_expression']:
+                        references['class'][name].append({
+                            "file": file_path,
+                            "line": node.start_point[0] + 1,
+                            "column": node.start_point[1] + 1,
+                            "text": parent.text.decode()
+                        })
                     
-                    # Add children to stack with their parent
-                    stack.extend((child, node) for child in node.children)
+                    # Check if it's a method reference
+                    if name in method_names and parent and parent.type in ['call_expression', 'method_invocation']:
+                        references['method'][name].append({
+                            "file": file_path,
+                            "line": node.start_point[0] + 1,
+                            "column": node.start_point[1] + 1,
+                            "text": parent.text.decode()
+                        })
+                
+                # Add children to stack with their parent
+                stack.extend((child, node) for child in node.children)
 
     return references
 

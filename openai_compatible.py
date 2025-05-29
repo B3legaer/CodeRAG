@@ -404,15 +404,15 @@ async def chat_completions(request: ChatCompletionRequest):
         logger.info(f"Processing query: {query}")
         
         # Initialize variables for logging
-        needs_context = '@codebase' in query or 'codebase' in query.lower()
+        needs_context = True #'@codebase' in query or 'codebase' in query.lower()
         context = ""
         class_docs = []
         method_docs = []
         
         # Generate context using app.py's generate_context function
         if needs_context:
-            query_clean = query.replace('@codebase', '').strip()
-            context, class_docs, method_docs = generate_context(query_clean, True)
+            #query_clean = query.replace('@codebase', '').strip()
+            context, class_docs, method_docs = generate_context(query, True)
             logger.info("Generated context for query with codebase reference.")
         
         # Generate chat response using app.py's chat function

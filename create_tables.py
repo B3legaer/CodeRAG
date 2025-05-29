@@ -6,6 +6,8 @@ from lancedb.embeddings import EmbeddingFunctionRegistry, get_registry
 from lancedb.pydantic import LanceModel, Vector
 import tiktoken
 from dotenv import load_dotenv
+import chardet
+import logging
 
 load_dotenv()
 
@@ -33,11 +35,64 @@ def get_special_files(directory):
                 md_files.append(full_path)
     return md_files
 
+def read_file_with_encoding(file_path):
+    """
+    Try to read a file with multiple encodings.
+    Returns the file content as a string, or None if all encodings fail.
+    """
+    # List of encodings to try, in order of preference
+    encodings_to_try = [
+        'utf-8',
+        'utf-16',
+        'utf-16-be',
+        'utf-16-le',
+        'latin1',
+        'cp1252',  # Windows-1252
+        'iso-8859-1',
+        'ascii'
+    ]
+    
+    # First, try to detect the encoding
+    try:
+        with open(file_path, 'rb') as file:
+            raw_data = file.read()
+            detected = chardet.detect(raw_data)
+            if detected['encoding'] and detected['confidence'] > 0.7:
+                try:
+                    return raw_data.decode(detected['encoding'])
+                except (UnicodeDecodeError, LookupError):
+                    pass
+    except Exception:
+        pass
+    
+    # If detection fails, try common encodings
+    for encoding in encodings_to_try:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                return file.read()
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+        except Exception as e:
+            logging.warning(f"Error reading {file_path} with {encoding}: {e}")
+            continue
+    
+    # If all else fails, try reading as binary and decode with errors='replace'
+    try:
+        with open(file_path, 'rb') as file:
+            raw_data = file.read()
+            return raw_data.decode('utf-8', errors='replace')
+    except Exception as e:
+        logging.error(f"Failed to read {file_path} with any encoding: {e}")
+        return None
+
 def process_special_files(md_files):
     contents = {}
     for file_path in md_files:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            contents[file_path] = file.read()  # Store the content against the file path
+        content = read_file_with_encoding(file_path)
+        if content is not None:
+            contents[file_path] = content
+        else:
+            logging.warning(f"Skipping file due to encoding issues: {file_path}")
     return contents
 
 

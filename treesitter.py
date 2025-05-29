@@ -18,15 +18,12 @@ LANGUAGE_QUERIES = {
     LanguageEnum.JAVA: {
         'class_query': """
             (class_declaration
-                name: (identifier) @class.name
-                (base_list
-                    (identifier) @class.base)
-
-            (class_declaration
                 name: (identifier) @class.name)
-            )
         """,
         'field_query': """
+            (field_declaration
+                declarator: (variable_declarator
+                    name: (identifier) @field.name))
         """,
         'method_query': """
             [
@@ -46,6 +43,8 @@ LANGUAGE_QUERIES = {
                 name: (identifier) @class.name)
         """,
         'field_query': """
+            (assignment
+                left: (identifier) @field.name)
         """,
         'method_query': """
             (function_definition
@@ -62,6 +61,8 @@ LANGUAGE_QUERIES = {
                 name: (type_identifier) @class.name)
         """,
         'field_query': """
+            (field_declaration
+                name: (field_identifier) @field.name)
         """,
         'method_query': """
             (function_item
@@ -79,7 +80,10 @@ LANGUAGE_QUERIES = {
             (class_declaration
                 name: (identifier) @class.name)
         """,
-        'field_query': "",
+        'field_query': """
+            (field_definition
+                property: (property_identifier) @field.name)
+        """,
         'method_query': """
             (method_definition
                 name: (property_identifier) @method.name)
@@ -90,29 +94,26 @@ LANGUAGE_QUERIES = {
     },
     LanguageEnum.CSHARP: {
         'class_query': """
-            (class_declaration
-                name: (identifier) @class.name
-                (base_list
-                    (identifier) @class.base))
-            
-            (class_declaration
-                name: (identifier) @class.name)
+            [
+                (class_declaration
+                    name: (identifier) @class.name
+                    (base_list
+                        (identifier) @class.base))
+                (class_declaration
+                    name: (identifier) @class.name)
+            ]
         """,
         'field_query': """
             (field_declaration
-                ((modifier) @field.modifier
-                    (#any-eq? @field.modifier "public")
-                    (variable_declaration
-                        (variable_declarator
-                            name: (identifier) @field.name)
-                    )
-                )
-            )
+                (modifier)* @field.modifier
+                (variable_declaration
+                    (variable_declarator
+                        name: (identifier) @field.name)))
         """,
         'method_query': """
             [
                 (method_declaration
-                        name: (identifier) @method.name)
+                    name: (identifier) @method.name)
                 (constructor_declaration
                     name: (identifier) @method.name)
             ]
