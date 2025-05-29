@@ -4,3 +4,4 @@ database/
 processed/
 venv
 app.log
+logs/

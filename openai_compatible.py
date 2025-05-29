@@ -59,10 +59,10 @@ class Message(BaseModel):
     content: str
 
 class ChatCompletionRequest(BaseModel):
-    model: str
+    model: str = CONFIG['CHAT_MODEL']
     messages: List[Message]
-    max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
+    max_tokens: Optional[int] = 10240
+    temperature: Optional[float] = 0.6
     stream: Optional[bool] = False
     user: Optional[str] = None  # OpenAI standard user identifier
 
