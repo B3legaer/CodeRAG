@@ -1,14 +1,21 @@
 #!/bin/bash
 
-# Check if folder path is provided as argument
-if [ $# -eq 0 ]; then
-    echo "Error: Please provide the folder path as an argument"
-    echo "Usage: ./index_codebase.sh <folder_path>"
-    exit 1
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
 fi
 
-# Get the folder path from command line argument
-folder_path="$1"
+# Use CODEBASE_PATH from .env as default, or command line argument if provided
+if [ $# -eq 0 ]; then
+    if [ -z "$CODEBASE_PATH" ]; then
+        echo "Error: Please provide the folder path as an argument or set CODEBASE_PATH in .env file"
+        echo "Usage: ./index_codebase.sh <folder_path>"
+        exit 1
+    fi
+    folder_path="$CODEBASE_PATH"
+else
+    folder_path="$1"
+fi
 
 # Check if the folder exists
 if [ ! -d "$folder_path" ]; then

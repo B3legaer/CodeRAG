@@ -8,6 +8,7 @@ import tiktoken
 from dotenv import load_dotenv
 import chardet
 import logging
+import torch
 
 load_dotenv()
 
@@ -134,16 +135,34 @@ elif EmbeddingClient == "vllm":
     print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
 elif EmbeddingClient == "hf":
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
-    model = get_registry().get("huggingface").create(name=MODEL_NAME, trust_remote_code=True)
+    # Check if CUDA is available
+    device = "cuda:1" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
+    
+    model = get_registry().get("huggingface").create(
+        name=MODEL_NAME, 
+        trust_remote_code=True,
+        device=device,
+        tokenizer_kwargs={"max_length": 4096,
+                          "truncation": True,
+                          "padding": True}
+    )
     EMBEDDING_DIM = model.ndims()  # hf's dimension
     MAX_TOKENS = 4000
-    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME} on {device}")
 elif EmbeddingClient == "sf":
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "")
-    model = get_registry().get("sentence-transformers").create(name=MODEL_NAME)
-    EMBEDDING_DIM = model.ndims()  # sf's dimension
+    # Check if CUDA is available
+    device = "cuda:1" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
+    
+    model = get_registry().get("sentence-transformers").create(
+        name=MODEL_NAME,
+        device=device  # Specify device explicitly
+    )
+    EMBEDDING_DIM = model.ndims()
     MAX_TOKENS = 4000
-    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME}")
+    print(f"Using {EmbeddingClient} for embeddings with model {MODEL_NAME} on {device}")
 else:
     MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
     model = registry.get("openai").create(name=MODEL_NAME, max_retries=2)
